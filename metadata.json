@@ -1,0 +1,6 @@
+{
+  "name": "Flickorax",
+  "description": "AI-powered entertainment recommender for movies, anime, series, and dramas—discover solo or match together in a live Watch Party.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

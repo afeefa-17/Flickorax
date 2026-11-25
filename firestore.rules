@@ -1,0 +1,321 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global safety net: deny everything by default
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Primitive Helpers ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isFullAccount() {
+      return isSignedIn() && request.auth.token.firebase.sign_in_provider != 'anonymous';
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidRoomCode(code) {
+      return code is string && code.size() == 6 && code.matches('^[A-HJ-NP-Z2-9]{6}$');
+    }
+
+    function isOwner(userId) {
+      return isFullAccount() && request.auth.uid == userId;
+    }
+
+    function isBoundedStringList(arr, maxLen) {
+      return arr is list && arr.size() <= maxLen && (arr.size() == 0 || arr[0] is string);
+    }
+
+    // --- Entity Validation Helpers ---
+
+    function isValidSavedPreferences(data, userId) {
+      return data.keys().hasAll([
+          'userId', 'languages', 'subtitlesFine', 'genres',
+          'moods', 'countries', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'userId', 'languages', 'subtitlesFine', 'genres',
+          'moods', 'countries', 'updatedAt'
+        ])
+        && data.userId is string && data.userId == userId
+        && isValidId(data.userId)
+        && isBoundedStringList(data.languages, 30)
+        && data.subtitlesFine is bool
+        && isBoundedStringList(data.genres, 40)
+        && isBoundedStringList(data.moods, 10)
+        && isBoundedStringList(data.countries, 30)
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidWatchlistItem(data, userId) {
+      return data.keys().hasAll([
+          'userId', 'externalId', 'source', 'mediaType',
+          'title', 'year', 'posterUrl', 'genres', 'rating', 'overview', 'addedAt'
+        ])
+        && data.keys().hasOnly([
+          'userId', 'externalId', 'source', 'mediaType',
+          'title', 'year', 'posterUrl', 'genres', 'rating', 'overview', 'reason', 'addedAt'
+        ])
+        && data.userId is string && data.userId == userId
+        && isValidId(data.userId)
+        && data.externalId is string && data.externalId.size() >= 1 && data.externalId.size() <= 100
+        && data.externalId.matches('^[a-zA-Z0-9_\\-]+$')
+        && data.source in ['tmdb', 'anilist']
+        && data.mediaType in ['movie', 'series', 'drama', 'anime']
+        && data.title is string && data.title.size() >= 1 && data.title.size() <= 300
+        && data.year is string && data.year.size() <= 16
+        && data.posterUrl is string && data.posterUrl.size() <= 600
+        && isBoundedStringList(data.genres, 15)
+        && (data.rating is int || data.rating is float)
+        && data.overview is string && data.overview.size() <= 2500
+        && (!data.keys().hasAny(['reason']) || (data.reason is string && data.reason.size() <= 600))
+        && data.addedAt is timestamp;
+    }
+
+    function isValidRoomDirectoryEntry(data, roomId) {
+      return data.keys().hasAll(['code', 'hostId', 'memberCount', 'createdAt', 'expiresAt', 'updatedAt'])
+        && data.keys().hasOnly(['code', 'hostId', 'memberCount', 'createdAt', 'expiresAt', 'updatedAt'])
+        && data.code == roomId
+        && isValidRoomCode(data.code)
+        && isValidId(data.hostId)
+        && data.memberCount is int && data.memberCount >= 1 && data.memberCount <= 10
+        && data.createdAt is timestamp
+        && data.expiresAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidWatchPartyRoom(data, roomId) {
+      return data.keys().hasAll([
+          'code', 'hostId', 'hostName', 'memberIds', 'memberCount',
+          'status', 'results', 'createdAt', 'expiresAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'code', 'hostId', 'hostName', 'memberIds', 'memberCount',
+          'status', 'results', 'errorMessage', 'createdAt', 'expiresAt', 'updatedAt'
+        ])
+        && data.code == roomId
+        && isValidRoomCode(data.code)
+        && isValidId(data.hostId)
+        && data.hostName is string && data.hostName.size() >= 1 && data.hostName.size() <= 60
+        && data.memberIds is list && data.memberIds.size() >= 1 && data.memberIds.size() <= 10
+        && data.memberIds[0] is string
+        && data.memberCount is int && data.memberCount >= 1 && data.memberCount <= 10
+        && data.memberCount == data.memberIds.size()
+        && data.status in ['waiting', 'matching', 'matched']
+        && data.results is list && data.results.size() <= 10
+        && (data.results.size() == 0 || data.results[0] is map)
+        && (!data.keys().hasAny(['errorMessage']) || (data.errorMessage is string && data.errorMessage.size() <= 500))
+        && data.createdAt is timestamp
+        && data.expiresAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidRoomMember(data, memberId) {
+      return data.keys().hasAll(['uid', 'name', 'isHost', 'status', 'joinedAt', 'updatedAt'])
+        && data.keys().hasOnly(['uid', 'name', 'isHost', 'status', 'preferences', 'joinedAt', 'updatedAt'])
+        && data.uid == memberId
+        && isValidId(data.uid)
+        && data.name is string && data.name.size() >= 1 && data.name.size() <= 60
+        && data.isHost is bool
+        && data.status in ['choosing', 'ready']
+        && (!data.keys().hasAny(['preferences']) || data.preferences == null || data.preferences is map)
+        && data.joinedAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    // --- Collection Rules ---
+
+    // User Saved Preferences (Private to non-anonymous owner)
+    match /users/{userId}/preferences/{prefId} {
+      allow get: if isValidId(userId) && prefId == 'saved' && isOwner(userId);
+      allow list: if false;
+      allow create: if isValidId(userId)
+        && prefId == 'saved'
+        && isOwner(userId)
+        && isValidSavedPreferences(incoming(), userId)
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(userId)
+        && prefId == 'saved'
+        && isOwner(userId)
+        && isValidSavedPreferences(incoming(), userId)
+        && incoming().userId == existing().userId
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'languages', 'subtitlesFine', 'genres', 'moods', 'countries', 'updatedAt'
+        ]);
+      allow delete: if isValidId(userId) && prefId == 'saved' && isOwner(userId);
+    }
+
+    // User Watchlist (Private to non-anonymous owner)
+    match /users/{userId}/watchlist/{itemId} {
+      allow get: if isValidId(userId) && isValidId(itemId) && isOwner(userId);
+      allow list: if isOwner(userId) && resource.data.userId == request.auth.uid;
+      allow create: if isValidId(userId)
+        && isValidId(itemId)
+        && isOwner(userId)
+        && isValidWatchlistItem(incoming(), userId)
+        && incoming().externalId == itemId
+        && incoming().addedAt == request.time;
+      allow update: if false;
+      allow delete: if isValidId(userId) && isValidId(itemId) && isOwner(userId);
+    }
+
+    // Room Directory (Exact room code lookup only; no listing)
+    match /roomDirectory/{roomId} {
+      allow get: if isSignedIn() && isValidRoomCode(roomId);
+      allow list: if false;
+      allow create: if isSignedIn()
+        && isValidRoomCode(roomId)
+        && isValidRoomDirectoryEntry(incoming(), roomId)
+        && incoming().hostId == request.auth.uid
+        && incoming().memberCount == 1
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && incoming().expiresAt > request.time
+        && incoming().expiresAt <= request.time + duration.value(16, 'h')
+        && existsAfter(/databases/$(database)/documents/rooms/$(roomId));
+      allow update: if isSignedIn()
+        && isValidRoomCode(roomId)
+        && isValidRoomDirectoryEntry(incoming(), roomId)
+        && existing().expiresAt > request.time
+        && incoming().code == existing().code
+        && incoming().hostId == existing().hostId
+        && incoming().createdAt == existing().createdAt
+        && incoming().expiresAt == existing().expiresAt
+        && incoming().updatedAt == request.time
+        && incoming().memberCount == existing().memberCount + 1
+        && incoming().memberCount <= 10
+        && incoming().diff(existing()).affectedKeys().hasOnly(['memberCount', 'updatedAt'])
+        && getAfter(/databases/$(database)/documents/rooms/$(roomId)).data.memberCount == incoming().memberCount;
+      allow delete: if isSignedIn()
+        && isValidRoomCode(roomId)
+        && (existing().expiresAt <= request.time || existing().hostId == request.auth.uid);
+    }
+
+    // Watch Party Rooms (Readable only by current room members)
+    match /rooms/{roomId} {
+      allow get: if isSignedIn()
+        && isValidRoomCode(roomId)
+        && (request.auth.uid in existing().memberIds);
+      allow list: if false;
+
+      allow create: if isSignedIn()
+        && isValidRoomCode(roomId)
+        && isValidWatchPartyRoom(incoming(), roomId)
+        && incoming().hostId == request.auth.uid
+        && incoming().memberIds.size() == 1
+        && incoming().memberIds[0] == request.auth.uid
+        && incoming().memberCount == 1
+        && incoming().status == 'waiting'
+        && incoming().results.size() == 0
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && incoming().expiresAt > request.time
+        && incoming().expiresAt <= request.time + duration.value(16, 'h')
+        && existsAfter(/databases/$(database)/documents/roomDirectory/$(roomId))
+        && existsAfter(/databases/$(database)/documents/rooms/$(roomId)/members/$(request.auth.uid));
+
+      allow update: if isSignedIn()
+        && isValidRoomCode(roomId)
+        && isValidWatchPartyRoom(incoming(), roomId)
+        && existing().expiresAt > request.time
+        && incoming().code == existing().code
+        && incoming().hostId == existing().hostId
+        && incoming().hostName == existing().hostName
+        && incoming().createdAt == existing().createdAt
+        && incoming().expiresAt == existing().expiresAt
+        && incoming().updatedAt == request.time
+        && (
+          // Action 1: Join room atomically (enforces 10-member cap at commit time)
+          (
+            !(request.auth.uid in existing().memberIds)
+            && existing().memberIds.size() < 10
+            && existing().memberCount < 10
+            && incoming().memberIds.size() == existing().memberIds.size() + 1
+            && incoming().memberIds.hasAll(existing().memberIds)
+            && (request.auth.uid in incoming().memberIds)
+            && incoming().memberCount == existing().memberCount + 1
+            && incoming().diff(existing()).affectedKeys().hasOnly(['memberIds', 'memberCount', 'updatedAt'])
+            && existsAfter(/databases/$(database)/documents/rooms/$(roomId)/members/$(request.auth.uid))
+          )
+          ||
+          // Action 2: Host starts or completes/retries match
+          (
+            existing().hostId == request.auth.uid
+            && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'results', 'errorMessage', 'updatedAt'])
+          )
+        );
+
+      allow delete: if isSignedIn()
+        && isValidRoomCode(roomId)
+        && (existing().expiresAt <= request.time || existing().hostId == request.auth.uid);
+
+      // Room Members Subcollection (Master Gate: only room members can read)
+      match /members/{memberId} {
+        allow get: if isSignedIn()
+          && isValidRoomCode(roomId)
+          && isValidId(memberId)
+          && (request.auth.uid in get(/databases/$(database)/documents/rooms/$(roomId)).data.memberIds);
+        allow list: if isSignedIn()
+          && isValidRoomCode(roomId)
+          && (request.auth.uid in get(/databases/$(database)/documents/rooms/$(roomId)).data.memberIds);
+
+        allow create: if isSignedIn()
+          && isValidRoomCode(roomId)
+          && isValidId(memberId)
+          && request.auth.uid == memberId
+          && isValidRoomMember(incoming(), memberId)
+          && incoming().status == 'choosing'
+          && incoming().joinedAt == request.time
+          && incoming().updatedAt == request.time
+          && (request.auth.uid in getAfter(/databases/$(database)/documents/rooms/$(roomId)).data.memberIds)
+          && getAfter(/databases/$(database)/documents/rooms/$(roomId)).data.expiresAt > request.time
+          && (
+            (incoming().isHost == true && getAfter(/databases/$(database)/documents/rooms/$(roomId)).data.hostId == request.auth.uid)
+            ||
+            (incoming().isHost == false && getAfter(/databases/$(database)/documents/rooms/$(roomId)).data.hostId != request.auth.uid)
+          );
+
+        allow update: if isSignedIn()
+          && isValidRoomCode(roomId)
+          && isValidId(memberId)
+          && request.auth.uid == memberId
+          && isValidRoomMember(incoming(), memberId)
+          && incoming().uid == existing().uid
+          && incoming().name == existing().name
+          && incoming().isHost == existing().isHost
+          && incoming().joinedAt == existing().joinedAt
+          && incoming().updatedAt == request.time
+          && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'preferences', 'updatedAt'])
+          && get(/databases/$(database)/documents/rooms/$(roomId)).data.expiresAt > request.time
+          && get(/databases/$(database)/documents/rooms/$(roomId)).data.status == 'waiting'
+          && (request.auth.uid in get(/databases/$(database)/documents/rooms/$(roomId)).data.memberIds);
+
+        allow delete: if isSignedIn()
+          && isValidRoomCode(roomId)
+          && isValidId(memberId)
+          && (
+            !exists(/databases/$(database)/documents/rooms/$(roomId))
+            || get(/databases/$(database)/documents/rooms/$(roomId)).data.expiresAt <= request.time
+            || get(/databases/$(database)/documents/rooms/$(roomId)).data.hostId == request.auth.uid
+            || request.auth.uid == memberId
+          );
+      }
+    }
+  }
+}

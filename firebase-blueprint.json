@@ -1,0 +1,293 @@
+{
+  "entities": {
+    "SavedPreferences": {
+      "title": "SavedPreferences",
+      "description": "User's quietly saved recommendation preferences (language, genres, mood, country only).",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "languages": {
+          "type": "array",
+          "description": "Preferred audio languages (max 30)."
+        },
+        "subtitlesFine": {
+          "type": "boolean"
+        },
+        "genres": {
+          "type": "array",
+          "description": "Preferred genre names (max 40)."
+        },
+        "moods": {
+          "type": "array",
+          "description": "Preferred moods (max 10)."
+        },
+        "countries": {
+          "type": "array",
+          "description": "Preferred production countries (max 30)."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "userId",
+        "languages",
+        "subtitlesFine",
+        "genres",
+        "moods",
+        "countries",
+        "updatedAt"
+      ]
+    },
+    "WatchlistItem": {
+      "title": "WatchlistItem",
+      "description": "A saved movie, series, drama, or anime in a signed-in user's watchlist.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "externalId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "source": {
+          "type": "string",
+          "enum": ["tmdb", "anilist"]
+        },
+        "mediaType": {
+          "type": "string",
+          "enum": ["movie", "series", "drama", "anime"]
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 300
+        },
+        "year": {
+          "type": "string",
+          "maxLength": 16
+        },
+        "posterUrl": {
+          "type": "string",
+          "maxLength": 600
+        },
+        "genres": {
+          "type": "array"
+        },
+        "rating": {
+          "type": "number"
+        },
+        "overview": {
+          "type": "string",
+          "maxLength": 2500
+        },
+        "reason": {
+          "type": "string",
+          "maxLength": 600
+        },
+        "addedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "userId",
+        "externalId",
+        "source",
+        "mediaType",
+        "title",
+        "year",
+        "posterUrl",
+        "genres",
+        "rating",
+        "overview",
+        "addedAt"
+      ]
+    },
+    "RoomDirectoryEntry": {
+      "title": "RoomDirectoryEntry",
+      "description": "Minimal room lookup entry containing only room code, hostId, memberCount, and expiry timestamps for safe join validation.",
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "string",
+          "minLength": 6,
+          "maxLength": 6,
+          "pattern": "^[A-HJ-NP-Z2-9]{6}$"
+        },
+        "hostId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "memberCount": {
+          "type": "integer"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "expiresAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "code",
+        "hostId",
+        "memberCount",
+        "createdAt",
+        "expiresAt",
+        "updatedAt"
+      ]
+    },
+    "WatchPartyRoom": {
+      "title": "WatchPartyRoom",
+      "description": "Watch Party room readable only by current room members, capped at 10 members and 15 hours lifetime.",
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "string",
+          "minLength": 6,
+          "maxLength": 6,
+          "pattern": "^[A-HJ-NP-Z2-9]{6}$"
+        },
+        "hostId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "hostName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 60
+        },
+        "memberIds": {
+          "type": "array"
+        },
+        "memberCount": {
+          "type": "integer"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["waiting", "matching", "matched"]
+        },
+        "results": {
+          "type": "array"
+        },
+        "errorMessage": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "expiresAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "code",
+        "hostId",
+        "hostName",
+        "memberIds",
+        "memberCount",
+        "status",
+        "results",
+        "createdAt",
+        "expiresAt",
+        "updatedAt"
+      ]
+    },
+    "RoomMember": {
+      "title": "RoomMember",
+      "description": "Individual member state and temporary preferences inside a Watch Party room.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 60
+        },
+        "isHost": {
+          "type": "boolean"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["choosing", "ready"]
+        },
+        "preferences": {
+          "type": "object"
+        },
+        "joinedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "uid",
+        "name",
+        "isHost",
+        "status",
+        "joinedAt",
+        "updatedAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/users/{userId}/preferences/{prefId}": {
+      "schema": { "$ref": "#/entities/SavedPreferences" },
+      "description": "User's saved preferences document (prefId = saved), private to non-anonymous owner."
+    },
+    "/users/{userId}/watchlist/{itemId}": {
+      "schema": { "$ref": "#/entities/WatchlistItem" },
+      "description": "User's watchlist titles, private to non-anonymous owner."
+    },
+    "/roomDirectory/{roomId}": {
+      "schema": { "$ref": "#/entities/RoomDirectoryEntry" },
+      "description": "Non-sensitive room availability lookup by exact 6-char room code."
+    },
+    "/rooms/{roomId}": {
+      "schema": { "$ref": "#/entities/WatchPartyRoom" },
+      "description": "Active Watch Party room state, readable only by current members."
+    },
+    "/rooms/{roomId}/members/{memberId}": {
+      "schema": { "$ref": "#/entities/RoomMember" },
+      "description": "Watch Party member status and room-scoped picks, readable only by room members."
+    }
+  }
+}
